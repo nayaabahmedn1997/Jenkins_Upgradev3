@@ -1,8 +1,11 @@
-using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Builder;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Pi.Math;
 using Pi.Runtime;
 using PowerArgs;
+using Prometheus;
 using System;
 using System.IO;
 
@@ -19,7 +22,37 @@ namespace Pi.Web
                 {
                     case RunMode.Web:
                         Console.WriteLine("Running in web mode...");
-                        CreateHostBuilder(args).Build().Run();
+                        var builder = WebApplication.CreateBuilder(args);
+                        
+                        // Add services to the container
+                        builder.Services.AddControllersWithViews();
+                        
+                        var app = builder.Build();
+                        
+                        // Configure the HTTP request pipeline
+                        if (bool.Parse(app.Configuration["Computation:Metrics:Enabled"] ?? "false"))
+                        {
+                            app.UseMetricServer();
+                            app.UseHttpMetrics();
+                        }
+
+                        if (app.Environment.IsDevelopment())
+                        {
+                            app.UseDeveloperExceptionPage();
+                        }
+                        else
+                        {
+                            app.UseExceptionHandler("/Home/Error");
+                        }
+
+                        app.UseStaticFiles();
+                        app.UseRouting();
+
+                        app.MapControllerRoute(
+                            name: "default",
+                            pattern: "{controller=Pi}/{action=Index}/{id?}");
+                        
+                        app.Run();
                         break;
 
                     case RunMode.Console:
@@ -42,12 +75,5 @@ namespace Pi.Web
         {
             return MachinFormula.Calculate(decimalPlaces).ToString();
         }
-
-        public static IHostBuilder CreateHostBuilder(string[] args) =>
-            Host.CreateDefaultBuilder(args)
-                .ConfigureWebHostDefaults(webBuilder =>
-                {
-                    webBuilder.UseStartup<Startup>();
-                });
     }
 }
